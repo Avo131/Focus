@@ -167,9 +167,9 @@
         <button class="icon-btn" id="closeAddTrack">✕</button>
       </div>
       <div class="modal-body">
-        <div class="spotify-link-section">
+        <div class="link-input-section">
           <label class="field-label" data-i18n="spotifyLinkLabel">Playlist Spotify (lien de partage)</label>
-          <div class="spotify-link-row">
+          <div class="link-input-row">
             <input type="text" id="spotifyLinkInput" data-i18n-placeholder="spotifyLinkPlaceholder" placeholder="https://open.spotify.com/playlist/...">
             <button type="button" class="text-btn" id="spotifyLinkAddBtn" data-i18n="spotifyLinkAddBtn">Ajouter</button>
           </div>
@@ -205,6 +205,16 @@
           <button class="preset-swatch preset-rose" data-preset="rose" data-i18n-title="presetRose" title="Rosé"></button>
           <button class="preset-swatch preset-midnight" data-preset="midnight" data-i18n-title="presetMidnight" title="Minuit"></button>
         </div>
+
+        <div class="link-input-section">
+          <label class="field-label" data-i18n="pinterestLinkLabel">Fond depuis un lien d'image (ex. Pinterest)</label>
+          <div class="link-input-row">
+            <input type="text" id="pinterestLinkInput" data-i18n-placeholder="pinterestLinkPlaceholder" placeholder="https://i.pinimg.com/...">
+            <button type="button" class="text-btn" id="pinterestLinkAddBtn" data-i18n="pinterestLinkAddBtn">Ajouter</button>
+          </div>
+          <p class="modal-hint" data-i18n="pinterestLinkHint">Sur Pinterest : clic droit sur l'image de l'épingle → "Copier l'adresse de l'image".</p>
+        </div>
+        <div class="modal-divider"></div>
 
         <div class="bg-upload-row">
           <label class="upload-btn"><span data-i18n="uploadImageBtn">Importer une image</span>

@@ -82,6 +82,15 @@ const STRINGS = {
     spotifyLinkAdded: 'Playlist Spotify ajoutée — chargement du lecteur…',
     spotifyWidgetLoading: 'Chargement du lecteur Spotify…',
     spotifyWidgetLoadError: 'Le lecteur Spotify met du temps à répondre (bloqueur de script ?). Réessaie ou vérifie ta connexion.',
+    pinterestLinkLabel: "Fond depuis un lien d'image (ex. Pinterest)",
+    pinterestLinkPlaceholder: 'https://i.pinimg.com/...',
+    pinterestLinkAddBtn: 'Ajouter',
+    pinterestLinkHint: 'Sur Pinterest : clic droit sur l\'image de l\'épingle → "Copier l\'adresse de l\'image".',
+    pinterestLinkInvalid: "Lien non reconnu (doit commencer par http:// ou https://).",
+    pinterestLinkLoading: 'Chargement de l\'image…',
+    pinterestLinkError: "Impossible de charger cette image. Vérifie le lien (utilise l'adresse de l'image, pas celle de la page).",
+    pinterestLinkAdded: 'Fond mis à jour depuis le lien.',
+    bgCurrentPinterest: 'Fond actuel : image depuis un lien',
   },
   en: {
     appTitleTag: 'Focus. — Pomodoro Studio',
@@ -155,6 +164,15 @@ const STRINGS = {
     spotifyLinkAdded: 'Spotify playlist added — loading player…',
     spotifyWidgetLoading: 'Loading Spotify player…',
     spotifyWidgetLoadError: 'The Spotify player is taking a while to respond (blocked by an extension?). Try again or check your connection.',
+    pinterestLinkLabel: 'Background from an image link (e.g. Pinterest)',
+    pinterestLinkPlaceholder: 'https://i.pinimg.com/...',
+    pinterestLinkAddBtn: 'Add',
+    pinterestLinkHint: 'On Pinterest: right-click the pin\'s image → "Copy image address".',
+    pinterestLinkInvalid: 'Unrecognized link (must start with http:// or https://).',
+    pinterestLinkLoading: 'Loading image…',
+    pinterestLinkError: "Couldn't load this image. Check the link (use the image's address, not the page's).",
+    pinterestLinkAdded: 'Background updated from the link.',
+    bgCurrentPinterest: 'Current background: image from a link',
   },
 };
 
@@ -630,6 +648,16 @@ function applyBackgroundForMode(m) {
     customBgImg.onload = checkBrightnessOnceLoaded;
     customBgImg.src = bgObjectUrls[m];
     if (customBgImg.complete && customBgImg.naturalWidth > 0) checkBrightnessOnceLoaded();
+  } else if (cfg.type === 'imageUrl' && cfg.url) {
+    document.body.classList.add('has-custom-bg');
+    bgVideoEl.pause();
+    // Cross-origin (e.g. Pinterest's CDN) and not served with CORS headers: the image itself
+    // still displays fine, but reading its pixels for brightness detection will throw — caught
+    // below same as an undecoded frame, so the current text theme is simply kept as a fallback.
+    const checkBrightnessOnceLoaded = () => applyTextThemeForBrightness(customBgImg);
+    customBgImg.onload = checkBrightnessOnceLoaded;
+    customBgImg.src = cfg.url;
+    if (customBgImg.complete && customBgImg.naturalWidth > 0) checkBrightnessOnceLoaded();
   } else if (cfg.type === 'video' && bgObjectUrls[m]) {
     if (bgVideoEl.src !== bgObjectUrls[m]) bgVideoEl.src = bgObjectUrls[m];
     document.body.classList.add('has-custom-video');
@@ -644,6 +672,7 @@ function applyBackgroundForMode(m) {
 
 function describeBg(cfg) {
   if (cfg.type === 'image') return t('bgCurrentImage');
+  if (cfg.type === 'imageUrl') return t('bgCurrentPinterest');
   if (cfg.type === 'video') return t('bgCurrentVideo');
   return t('bgCurrentGradient');
 }
@@ -682,6 +711,28 @@ document.querySelectorAll('.preset-swatch').forEach(btn => {
     if (bgModalMode === mode) applyBackgroundForMode(mode);
     dbDeleteBackground(bgModalMode).catch(err => console.error('Nettoyage IndexedDB échoué :', err));
   });
+});
+
+// Background from a direct image link (e.g. copied from a Pinterest pin) — loaded straight from
+// its host, not stored locally: no fetch/CORS involved, just an <img> pointed at the URL, same as
+// displaying any image cross-origin. Probes the link first so a bad URL never leaves a broken slot.
+$('#pinterestLinkAddBtn').addEventListener('click', () => {
+  const url = $('#pinterestLinkInput').value.trim();
+  if (!/^https?:\/\//i.test(url)) { showTransientMessage(t('pinterestLinkInvalid')); return; }
+  showTransientMessage(t('pinterestLinkLoading'));
+  const probe = new Image();
+  probe.onload = () => {
+    if (bgObjectUrls[bgModalMode]) { URL.revokeObjectURL(bgObjectUrls[bgModalMode]); delete bgObjectUrls[bgModalMode]; }
+    bgConfig[bgModalMode] = { type: 'imageUrl', url };
+    saveBgConfig();
+    $('#pinterestLinkInput').value = '';
+    renderBgModal();
+    if (bgModalMode === mode) applyBackgroundForMode(mode);
+    dbDeleteBackground(bgModalMode).catch(err => console.error('Nettoyage IndexedDB échoué :', err));
+    showTransientMessage(t('pinterestLinkAdded'));
+  };
+  probe.onerror = () => showTransientMessage(t('pinterestLinkError'));
+  probe.src = url;
 });
 
 function handleBgUpload(file, kind, maxBytes, tooLargeMsg) {

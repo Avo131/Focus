@@ -849,7 +849,7 @@ input[type="range"]::-moz-range-thumb {
 .text-btn:hover { color: var(--text); }
 
 /* ---------- Spotify integration (public playlist embed by link) ---------- */
-.spotify-link-section {
+.link-input-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -859,12 +859,12 @@ input[type="range"]::-moz-range-thumb {
   font-size: 12.5px;
   color: var(--text-dim);
 }
-.spotify-link-row {
+.link-input-row {
   display: flex;
   gap: 10px;
   align-items: center;
 }
-.spotify-link-row input[type="text"] {
+.link-input-row input[type="text"] {
   flex: 1;
   background: rgba(255,255,255,0.06);
   border: 1px solid var(--glass-border);
