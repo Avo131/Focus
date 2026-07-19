@@ -91,6 +91,8 @@
 
           <ul class="track-list" id="trackList"></ul>
 
+          <div class="spotify-widget" id="spotifyWidgetContainer"></div>
+
           <div class="now-playing" id="nowPlaying">
             <div class="eq" id="eqIcon"><span></span><span></span><span></span></div>
             <div class="np-info">
@@ -165,6 +167,14 @@
         <button class="icon-btn" id="closeAddTrack">✕</button>
       </div>
       <div class="modal-body">
+        <div class="spotify-link-section">
+          <label class="field-label" data-i18n="spotifyLinkLabel">Playlist Spotify (lien de partage)</label>
+          <div class="spotify-link-row">
+            <input type="text" id="spotifyLinkInput" data-i18n-placeholder="spotifyLinkPlaceholder" placeholder="https://open.spotify.com/playlist/...">
+            <button type="button" class="text-btn" id="spotifyLinkAddBtn" data-i18n="spotifyLinkAddBtn">Ajouter</button>
+          </div>
+        </div>
+        <div class="modal-divider"></div>
         <div class="dropzone" id="dropzone">
           <p><span data-i18n="dropzoneMain">Glisse tes morceaux ici</span><br><span data-i18n="dropzoneSub">ou clique pour parcourir</span></p>
         </div>
@@ -211,6 +221,7 @@
   </div>
 
   <audio id="audioPlayer" preload="metadata"></audio>
+  <div class="toast" id="toast" hidden></div>
   <script src="script.js"></script>
 </body>
 </html>

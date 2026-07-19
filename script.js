@@ -74,6 +74,14 @@ const STRINGS = {
     bgCurrentVideo: 'Fond actuel : vidéo importée',
     bgCurrentGradient: 'Fond actuel : dégradé',
     removeTrackTitle: 'Retirer',
+    spotifyLinkLabel: 'Playlist Spotify (lien de partage)',
+    spotifyLinkPlaceholder: 'https://open.spotify.com/playlist/...',
+    spotifyLinkAddBtn: 'Ajouter',
+    spotifyLinkInvalid: 'Lien de playlist Spotify non reconnu.',
+    spotifyLinkRemoveBtn: 'Retirer cette playlist Spotify',
+    spotifyLinkAdded: 'Playlist Spotify ajoutée — chargement du lecteur…',
+    spotifyWidgetLoading: 'Chargement du lecteur Spotify…',
+    spotifyWidgetLoadError: 'Le lecteur Spotify met du temps à répondre (bloqueur de script ?). Réessaie ou vérifie ta connexion.',
   },
   en: {
     appTitleTag: 'Focus. — Pomodoro Studio',
@@ -139,6 +147,14 @@ const STRINGS = {
     bgCurrentVideo: 'Current background: imported video',
     bgCurrentGradient: 'Current background: gradient',
     removeTrackTitle: 'Remove',
+    spotifyLinkLabel: 'Spotify playlist (share link)',
+    spotifyLinkPlaceholder: 'https://open.spotify.com/playlist/...',
+    spotifyLinkAddBtn: 'Add',
+    spotifyLinkInvalid: 'Unrecognized Spotify playlist link.',
+    spotifyLinkRemoveBtn: 'Remove this Spotify playlist',
+    spotifyLinkAdded: 'Spotify playlist added — loading player…',
+    spotifyWidgetLoading: 'Loading Spotify player…',
+    spotifyWidgetLoadError: 'The Spotify player is taking a while to respond (blocked by an extension?). Try again or check your connection.',
   },
 };
 
@@ -201,7 +217,6 @@ async function dbDeleteTrack(id) {
     req.onerror = () => reject(req.error);
   });
 }
-
 async function dbSetBackground(modeKey, kind, blob) {
   const db = await dbPromise;
   return new Promise((resolve, reject) => {
@@ -320,6 +335,7 @@ function stopTimerOnly() {
   clearInterval(timerId);
   startBtn.textContent = t('startBtnStart');
   startBtn.classList.remove('is-running');
+  pauseSpotifyForScope(liveScope);
 }
 
 function start() {
@@ -329,6 +345,7 @@ function start() {
   startBtn.classList.add('is-running');
   timerId = setInterval(tick, 1000);
   updateDisplay();
+  playSpotifyForLiveScope();
 }
 
 function pause() {
@@ -357,11 +374,18 @@ function tick() {
   updateDisplay();
 }
 
-function completeFocusSession() {
+// Advances the long-break cadence counter and decides the next phase. Shared by a natural
+// completion and a manual skip, so "every N sessions" stays consistent whichever way you got there.
+function advanceFocusCycle() {
   pomodorosCompleted += 1;
   saveCycleCount(pomodorosCompleted);
-  incrementSessionCount();
   return (pomodorosCompleted % settings.interval === 0) ? 'long' : 'short';
+}
+
+function completeFocusSession() {
+  const next = advanceFocusCycle();
+  incrementSessionCount();
+  return next;
 }
 
 function onSessionComplete() {
@@ -372,11 +396,12 @@ function onSessionComplete() {
   setMode(next, { autoStart: true });
 }
 
-// Passer manuellement à la phase suivante ne doit pas créditer une session non terminée
-// (pas de son/notification/comptage), ni forcer le démarrage d'un minuteur à l'arrêt.
+// Passer manuellement à la phase suivante ne doit pas créditer une session non terminée dans les
+// statistiques (pas de son/notification/comptage du jour), ni forcer le démarrage d'un minuteur à
+// l'arrêt — mais le cycle qui déclenche la Pause longue toutes les N sessions continue d'avancer.
 function skipPhase() {
   const wasRunning = running;
-  const next = mode === 'focus' ? 'short' : 'focus';
+  const next = mode === 'focus' ? advanceFocusCycle() : 'focus';
   stopTimerOnly();
   setMode(next, { autoStart: wasRunning });
 }
@@ -729,6 +754,7 @@ async function loadTracksFromDB() {
   const stored = await dbGetAllTracks();
   Object.keys(tracksByScope).forEach(k => { tracksByScope[k] = []; });
   stored.forEach(rec => {
+    if (!rec.blob) return; // leftover record from the old OAuth-based Spotify import, no longer supported
     const scope = tracksByScope[rec.scope] ? rec.scope : 'shared';
     tracksByScope[scope].push({ id: rec.id, name: cleanName(rec.name), url: URL.createObjectURL(rec.blob), duration: null });
   });
@@ -754,6 +780,7 @@ function refreshPlaylistUI() {
   renderPlaylistPhaseTabs();
   updatePlaylistScopeLabel();
   $('#playlistReadonlyNote').hidden = !(playlistMode === 'perphase' && viewScope !== liveScope);
+  renderSpotifyWidget();
 }
 
 // Browsing a tab never touches playback — you can curate any phase's list without disturbing what's playing.
@@ -763,25 +790,22 @@ function setViewScope(scope) {
   refreshPlaylistUI();
 }
 
-// The live library always mirrors the timer; playback resets on change. The panel follows along
-// only if the user was already looking at the live tab — deliberate browsing elsewhere is left alone.
+// The live library always mirrors the timer; playback resets on change. The displayed panel
+// always follows along too, so it's never possible to be looking at the wrong phase's playlist.
 // If music was actually playing when the phase changes, it picks back up automatically on the new
 // phase's playlist — if it was paused (or never started), the switch stays silent.
 function setLiveScope(scope) {
-  const wasViewingLive = viewScope === liveScope;
   if (scope !== liveScope) {
-    const wasPlaying = !audioPlayer.paused && currentIndex !== -1;
-    audioPlayer.pause();
-    audioPlayer.removeAttribute('src');
-    currentIndex = -1;
-    resetNowPlayingDisplay();
-    updatePlayIcon(false);
+    const wasPlaying = isCurrentlyPlaying();
+    stopPlayback();
+    pauseSpotifyForScope(liveScope); // leaving this phase — stop its Spotify playlist too
     liveScope = scope;
-    if (wasViewingLive) viewScope = scope;
+    viewScope = scope;
     refreshPlaylistUI();
     if (wasPlaying && liveTracks().length > 0) {
       playTrack(isShuffle ? Math.floor(Math.random() * liveTracks().length) : 0);
     }
+    if (running) playSpotifyForLiveScope(); // timer kept running through the phase change
     return;
   }
   refreshPlaylistUI();
@@ -869,11 +893,7 @@ async function removeTrack(index) {
   const wasPlaying = isLive && index === currentIndex;
   list.splice(index, 1);
   if (wasPlaying) {
-    audioPlayer.pause();
-    audioPlayer.removeAttribute('src');
-    currentIndex = -1;
-    resetNowPlayingDisplay();
-    updatePlayIcon(false);
+    stopPlayback();
   } else if (isLive && index < currentIndex) {
     currentIndex -= 1;
   }
@@ -889,6 +909,20 @@ function playTrack(index) {
   audioPlayer.play().catch(() => {});
   npTitle.textContent = track.name;
   renderTrackList();
+}
+
+// Central "stop" used whenever playback must be forcibly reset (scope switch, track removal):
+function stopPlayback() {
+  audioPlayer.pause();
+  audioPlayer.removeAttribute('src');
+  currentIndex = -1;
+  resetNowPlayingDisplay();
+  updatePlayIcon(false);
+}
+
+function isCurrentlyPlaying() {
+  if (currentIndex === -1) return false;
+  return !!liveTracks()[currentIndex] && !audioPlayer.paused;
 }
 
 function updatePlayIcon(playing) {
@@ -947,7 +981,7 @@ repeatBtn.addEventListener('click', () => {
   repeatBtn.textContent = repeatMode === 'one' ? '🔂' : '🔁';
 });
 
-audioPlayer.addEventListener('ended', () => {
+function handlePlaybackEnded() {
   if (repeatMode === 'one') { playTrack(currentIndex); return; }
   const i = pickNextIndex();
   if (i === -1) return;
@@ -956,7 +990,8 @@ audioPlayer.addEventListener('ended', () => {
     return;
   }
   playTrack(i);
-});
+}
+audioPlayer.addEventListener('ended', handlePlaybackEnded);
 
 audioPlayer.addEventListener('loadedmetadata', () => {
   npDuration.textContent = fmtTime(audioPlayer.duration);
@@ -971,7 +1006,9 @@ audioPlayer.addEventListener('timeupdate', () => {
   npCurrent.textContent = fmtTime(audioPlayer.currentTime);
   if (!seekBar.matches(':active')) seekBar.value = audioPlayer.currentTime;
 });
-seekBar.addEventListener('input', () => { audioPlayer.currentTime = seekBar.value; });
+seekBar.addEventListener('input', () => {
+  audioPlayer.currentTime = seekBar.value;
+});
 
 /* ---- playlist mode: unique vs. par phase ---- */
 document.querySelectorAll('.pmode-btn').forEach(btn => {
@@ -1012,12 +1049,157 @@ dropzone.addEventListener('drop', (e) => {
 });
 document.body.addEventListener('drop', (e) => e.preventDefault());
 
+/* ---- toast (non-blocking feedback, unlike the existing alert() calls) ---- */
+function showTransientMessage(msg) {
+  const toast = $('#toast');
+  toast.textContent = msg;
+  toast.hidden = false;
+  clearTimeout(showTransientMessage._t);
+  showTransientMessage._t = setTimeout(() => { toast.hidden = true; }, 4000);
+}
+
+/* ---- Spotify: playlist widget by link (public embed, no OAuth/API/account needed) ---- */
+const SPOTIFY_WIDGET_KEY = 'pomodoro_spotify_widget';
+const SPOTIFY_WIDGET_SCOPES = ['shared', 'focus', 'short', 'long'];
+let spotifyWidgets = { shared: null, focus: null, short: null, long: null, ...JSON.parse(localStorage.getItem(SPOTIFY_WIDGET_KEY) || '{}') };
+let spotifyControllers = {}; // scope -> Spotify EmbedController, created lazily once a playlist is linked
+let spotifyControllerPromises = {}; // scope -> in-flight createController promise, to dedupe concurrent calls
+
+function saveSpotifyWidgets() {
+  localStorage.setItem(SPOTIFY_WIDGET_KEY, JSON.stringify(spotifyWidgets));
+}
+
+// Accepts a playlist page URL (https://open.spotify.com/playlist/<id>, with or without a locale
+// prefix or ?si=... suffix) or a spotify:playlist:<id> URI. Returns the bare id, or null.
+function extractSpotifyPlaylistId(input) {
+  const match = input.trim().match(/playlist[/:]([a-zA-Z0-9]+)/);
+  return match ? match[1] : null;
+}
+
+// One-time DOM setup: a hidden slot per phase, each with its own embed target + remove button.
+// Slots for phases the visitor isn't currently viewing stay in the DOM (just hidden) so a
+// playlist keeps playing in the background — e.g. while browsing the Short-break tab during Focus.
+// .spotify-embed-mount is a stable wrapper we control: a fresh throwaway <div> is created inside
+// it for each createController() call, since Spotify's own code takes over/replaces whatever
+// element it's given — trying to re-find that same element afterwards would fail.
+function buildSpotifyWidgetSlots() {
+  const container = $('#spotifyWidgetContainer');
+  container.innerHTML = SPOTIFY_WIDGET_SCOPES.map(scope => `
+    <div class="spotify-widget-slot" data-scope="${scope}" hidden>
+      <p class="spotify-widget-status"></p>
+      <div class="spotify-embed-mount"></div>
+      <button type="button" class="text-btn spotify-remove-btn" data-i18n="spotifyLinkRemoveBtn">Retirer cette playlist Spotify</button>
+    </div>
+  `).join('');
+  SPOTIFY_WIDGET_SCOPES.forEach(scope => {
+    container.querySelector(`.spotify-widget-slot[data-scope="${scope}"] .spotify-remove-btn`)
+      .addEventListener('click', () => removeSpotifyWidget(scope));
+  });
+}
+
+let spotifyIframeApiPromise = null;
+function loadSpotifyIframeApi() {
+  if (spotifyIframeApiPromise) return spotifyIframeApiPromise;
+  spotifyIframeApiPromise = new Promise((resolve) => {
+    window.onSpotifyIframeApiReady = resolve;
+    const script = document.createElement('script');
+    script.src = 'https://open.spotify.com/embed/iframe-api/v1';
+    script.async = true;
+    document.head.appendChild(script);
+  });
+  return spotifyIframeApiPromise;
+}
+
+function ensureSpotifyController(scope) {
+  const playlistId = spotifyWidgets[scope];
+  if (!playlistId) return Promise.resolve(null);
+  if (spotifyControllers[scope]) return Promise.resolve(spotifyControllers[scope]);
+  if (spotifyControllerPromises[scope]) return spotifyControllerPromises[scope];
+  const promise = loadSpotifyIframeApi().then(IFrameAPI => new Promise((resolve) => {
+    const mount = $(`.spotify-widget-slot[data-scope="${scope}"] .spotify-embed-mount`);
+    mount.innerHTML = ''; // drop any previous iframe before mounting a fresh one
+    const mountTarget = document.createElement('div');
+    mount.appendChild(mountTarget);
+    IFrameAPI.createController(mountTarget, { width: '100%', height: '352', uri: `spotify:playlist:${playlistId}` }, (controller) => {
+      spotifyControllers[scope] = controller;
+      resolve(controller);
+    });
+  }));
+  spotifyControllerPromises[scope] = promise;
+  return promise;
+}
+
+function destroySpotifyController(scope) {
+  if (spotifyControllers[scope]) { spotifyControllers[scope].destroy(); delete spotifyControllers[scope]; }
+  delete spotifyControllerPromises[scope];
+  const mount = document.querySelector(`.spotify-widget-slot[data-scope="${scope}"] .spotify-embed-mount`);
+  if (mount) mount.innerHTML = ''; // clear any leftover content so the next controller starts clean
+}
+
+function removeSpotifyWidget(scope) {
+  destroySpotifyController(scope);
+  spotifyWidgets[scope] = null;
+  saveSpotifyWidgets();
+  renderSpotifyWidget();
+}
+
+function renderSpotifyWidget() {
+  SPOTIFY_WIDGET_SCOPES.forEach(scope => {
+    $(`.spotify-widget-slot[data-scope="${scope}"]`).hidden = scope !== viewScope || !spotifyWidgets[scope];
+  });
+  if (spotifyWidgets[viewScope]) showSpotifyWidgetForScope(viewScope);
+}
+
+// Loading the Spotify embed (iframe-api script, then the embed itself) takes several seconds
+// over the network — without this placeholder, the widget appears to do nothing until the
+// page is reloaded, which is exactly what looked like a bug from the outside.
+function showSpotifyWidgetForScope(scope) {
+  if (spotifyControllers[scope]) return; // already loaded
+  const expectedId = spotifyWidgets[scope];
+  const status = $(`.spotify-widget-slot[data-scope="${scope}"] .spotify-widget-status`);
+  status.textContent = t('spotifyWidgetLoading');
+  const timeoutId = setTimeout(() => {
+    if (!spotifyControllers[scope] && spotifyWidgets[scope] === expectedId) {
+      status.textContent = t('spotifyWidgetLoadError');
+    }
+  }, 12000);
+  ensureSpotifyController(scope).then(controller => {
+    clearTimeout(timeoutId);
+    if (controller) status.textContent = ''; // the embed itself is now visible below
+  });
+}
+
+// Ties Spotify playback to the timer itself: starts the live phase's playlist when the timer
+// starts, pauses it when the timer stops — independent of the local-tracks player.
+function playSpotifyForLiveScope() {
+  if (!spotifyWidgets[liveScope]) return;
+  ensureSpotifyController(liveScope).then(controller => controller && controller.resume());
+}
+function pauseSpotifyForScope(scope) {
+  if (spotifyControllers[scope]) spotifyControllers[scope].pause();
+}
+
+$('#spotifyLinkAddBtn').addEventListener('click', () => {
+  const id = extractSpotifyPlaylistId($('#spotifyLinkInput').value);
+  if (!id) { showTransientMessage(t('spotifyLinkInvalid')); return; }
+  destroySpotifyController(viewScope);
+  spotifyWidgets[viewScope] = id;
+  saveSpotifyWidgets();
+  $('#spotifyLinkInput').value = '';
+  renderSpotifyWidget();
+  addTrackModal.classList.remove('open');
+  showTransientMessage(t('spotifyLinkAdded'));
+});
+
+buildSpotifyWidgetSlots();
+
 /* ---- language ---- */
 function applyTranslations() {
   document.documentElement.lang = lang;
   localStorage.setItem('pomodoro_lang', lang);
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
 
   // static text just got reset by the loop above — refresh anything computed dynamically
@@ -1044,8 +1226,9 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
   resetNowPlayingDisplay();
   updatePlayIcon(false);
   await loadBackgroundsFromDB();
+  applyPlaylistMode(); // must run before loading tracks: it sets viewScope/liveScope from the
+  // persisted playlist mode, which the initial (empty) track-list render below depends on
   await loadTracksFromDB();
-  applyPlaylistMode();
   setMode('focus');
   applyTranslations();
 })();
