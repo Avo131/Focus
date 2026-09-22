@@ -848,7 +848,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .text-btn:hover { color: var(--text); }
 
-/* ---------- Spotify integration (public playlist embed by link) ---------- */
+/* ---------- Spotify integration (OAuth account connection + Web Playback SDK) ---------- */
 .link-input-section {
   display: flex;
   flex-direction: column;

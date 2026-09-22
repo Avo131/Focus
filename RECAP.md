@@ -93,3 +93,51 @@ Tant que ces étapes ne sont pas faites, le bouton "Connecter Spotify" rediriger
 **Fonctionnement actuel** : dans "Ajouter des morceaux", un champ permet de coller un lien de partage de playlist Spotify (`https://open.spotify.com/playlist/...` ou `spotify:playlist:...`) par onglet de playlist (unique ou par phase). Un lecteur Spotify officiel s'affiche alors sous la liste de morceaux locaux. Ce lecteur est autonome (pochette, liste de morceaux, lecture) et n'est pas piloté par les boutons du site — c'est un widget Spotify, pas une fusion dans la playlist locale. La playlist doit être publique ou partageable par lien. Lecture complète si le visiteur est Premium et déjà connecté à Spotify dans son navigateur, sinon extraits de 30s.
 
 **Limite acceptée** : pas de "parcourir mes playlists" ni de lecture unifiée avec les fichiers locaux (shuffle/répétition/barre de progression du site) — c'est le compromis choisi pour lever toute limite de nombre de visiteurs.
+
+## Écran maintenu allumé pendant une session (2026-09-18)
+
+**Problème** : rien n'empêchait l'écran (surtout mobile) de s'éteindre/se verrouiller pendant une session Focus en cours, ce qui coupe visuellement le minuteur.
+
+**Fonctionnement ajouté** : via la Screen Wake Lock API, l'écran est maintenu allumé tant que le minuteur tourne. Le verrou est relâché à la pause, au reset, au skip et à la fin d'une session (mêmes points que l'arrêt du minuteur). Si l'onglet est mis en arrière-plan puis revient au premier plan alors que le minuteur tourne toujours, le verrou (automatiquement relâché par le système pendant que l'onglet était caché) est redemandé. Dégradation silencieuse sur les navigateurs qui ne supportent pas l'API (pas d'erreur visible, le minuteur continue de fonctionner normalement).
+
+## Fermeture des fenêtres avec Échap (2026-09-18)
+
+Toutes les fenêtres (Statistiques, Réglages, Ambiance, Ajouter des morceaux) se fermaient déjà en cliquant sur le fond assombri ou sur la croix, mais pas avec la touche Échap, contrairement à l'usage standard. Un seul écouteur global gère maintenant la fermeture de la fenêtre actuellement ouverte (`.modal-overlay.open`) avec Échap.
+
+## Piste Deezer explorée puis entièrement abandonnée (2026-09-18)
+
+**Ce qui a été essayé, dans l'ordre** :
+1. OAuth Deezer ("Connecter Deezer") — écarté : le propriétaire du site ne peut/veut pas créer d'app sur `developers.deezer.com`.
+2. Widget public par lien (`widget.deezer.com`, même principe que Spotify) — implémenté, testé avec un vrai compte Deezer Premium connecté dans le navigateur : **toujours limité aux extraits de 30s**, la lecture complète promise par la doc Deezer pour les comptes Premium connectés ne s'est pas vérifiée en pratique (cause exacte non identifiée — le blocage des cookies tiers, hypothèse initiale, a été vérifié comme non pertinent ici).
+3. Fusion des morceaux Deezer dans la playlist locale via l'API publique `api.deezer.com/playlist/<id>` (sans app, en JSONP) — resterait aussi limité à des extraits de 30s (champ `preview` de l'API, jamais le fichier complet, pour les mêmes raisons légales que partout ailleurs).
+
+**Décision finale** : retrait complet de Deezer du site (champ, widget, tout le code associé). Le propriétaire veut la lecture complète fusionnée dans la playlist du site, ce que Deezer ne peut offrir sans app développeur (et parfois même pas avec, comme observé au point 2) — voir la section suivante pour la voie retenue à la place (reconnexion Spotify OAuth, avec ses propres limites acceptées).
+
+## Retour à la connexion de compte Spotify (OAuth + Web Playback SDK), puis abandon (2026-09-18)
+
+**⚠️ Tentative annulée dans la même session — voir "Abandon de la reconnexion Spotify OAuth" plus bas pour la décision finale.** Section gardée pour l'historique (ce qui a été essayé et pourquoi ça n'a pas été gardé).
+
+**Décision (annulée depuis)** : après l'échec de la piste Deezer et le rejet du widget par lien (jamais fusionné dans la playlist), retour à la version du 18/07 : reconnecter un vrai compte Spotify (OAuth Authorization Code + PKCE, 100% côté client, toujours aucun backend). Le widget par lien Spotify du 19/07 est retiré à son tour. Limite acceptée en connaissance de cause : plafond de 5 comptes Spotify nommés (mode développeur), et l'app doit rester créée par un compte avec Premium actif — les deux contraintes qui avaient motivé l'abandon initial n'ont pas changé, mais le propriétaire préfère cette limite à l'absence de fusion dans la playlist.
+
+**Ce qui a été reconstruit** (le code d'origine n'était pas dans l'historique git, reconstruit à partir de zéro sur la base de cette documentation et des specs Spotify) :
+- Bloc "Connecter Spotify" dans `#addTrackModal` : bouton de connexion → redirection PKCE vers Spotify → au retour, échange du code contre un token, appel à `/me` pour afficher le compte connecté et noter si le compte n'est pas Premium.
+- Fenêtre "Playlists Spotify" (nouvelle modale) listant les playlists du compte (pochette, nom, nombre de morceaux) ; cliquer sur une playlist importe ses morceaux dans la playlist actuellement affichée (locale ou par phase), avec pagination (`next`) pour les playlists de plus de 100 morceaux.
+- Les morceaux Spotify vivent dans le même store IndexedDB que les fichiers locaux (`source: 'spotify'`, pas de blob — juste `uri`/`artist`/`duration`), avec un petit repère visuel vert et l'affichage "Titre — Artiste" dans la playlist.
+- Lecture via le Web Playback SDK (`sdk.scdn.co/spotify-player.js`) : les contrôles existants (lecture/pause, suivant/précédent, aléatoire, répétition, curseur) pilotent automatiquement le lecteur local `<audio>` ou le lecteur Spotify selon la source du morceau en cours. Détection de fin de morceau par heuristique (le SDK n'a pas d'événement natif "fin de morceau") — point le plus fragile, à surveiller en priorité si un morceau semble sauter ou se répéter.
+- Token de rafraîchissement géré automatiquement (réessai silencieux, déconnexion propre si le rafraîchissement échoue).
+- Échappement HTML ajouté sur les noms de morceaux/artistes/playlists Spotify avant affichage (texte venant du catalogue public Spotify, donc non fiable, contrairement aux noms de fichiers locaux).
+
+**Reste à faire avant que ça fonctionne réellement** (identique à la tentative du 18/07) :
+1. Créer une app sur `https://developer.spotify.com/dashboard` (nécessite un compte Premium actif en permanence pour le créateur de l'app).
+2. Une fois le site déployé sur son domaine final, y récupérer l'URL exacte et l'enregistrer comme Redirect URI de l'app.
+3. Cocher "Web Playback SDK" et "Web API".
+4. Copier le Client ID et remplacer le placeholder `SPOTIFY_CLIENT_ID` en haut de `script.js`.
+5. Ajouter jusqu'à 5 emails de comptes Spotify autorisés dans Settings → User Management.
+
+Tant que ces étapes ne sont pas faites, le bouton "Connecter Spotify" redirigera vers une erreur Spotify (Client ID invalide) — c'est attendu, comme la première fois.
+
+## Abandon de la reconnexion Spotify OAuth, retour définitif au widget par lien (2026-09-18)
+
+**Pourquoi** : en testant la reconnexion OAuth ci-dessus (redirection réelle vérifiée, bien formée, jusqu'à l'écran de connexion Spotify), le propriétaire a reconsidéré et voulu une version "juste coller un lien, sans compte" pour Spotify aussi — comme pour Deezer initialement. Vérification faite : impossible côté Spotify, contrairement à Deezer. L'API Spotify n'expose aucune donnée sans jeton d'accès, même en lecture seule sur une playlist publique ; obtenir ce jeton nécessite toujours une app, et cette app nécessite toujours que son créateur ait Spotify Premium actif en permanence (la case "Web API" se grise sinon — cause déjà rencontrée le 19/07). Il n'existe donc pas de version "lien seul, sans app" pour Spotify, à la différence de Deezer.
+
+**Décision finale** : tout le code OAuth/PKCE/Web Playback SDK/import de playlist ajouté dans la section précédente a été retiré. Le widget par lien du 19/07 (iframe officiel Spotify, autonome, non fusionné dans la playlist locale, lecture liée au démarrage/arrêt du minuteur) est restauré à l'identique. C'est l'état final retenu pour Spotify : aucune app, aucun compte, aucune limite de visiteurs — au prix de ne jamais fusionner les morceaux dans la playlist du site ni de garantir la lecture complète.

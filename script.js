@@ -7,6 +7,9 @@ const fmtTime = (secs) => {
   const s = secs % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
+// Track/artist/playlist names can come from Spotify's public catalog (untrusted external text),
+// unlike local filenames — escape before interpolating into innerHTML.
+const escapeHtml = (str) => String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ============ i18n ============ */
 const STRINGS = {
@@ -354,6 +357,7 @@ function stopTimerOnly() {
   startBtn.textContent = t('startBtnStart');
   startBtn.classList.remove('is-running');
   pauseSpotifyForScope(liveScope);
+  releaseWakeLock();
 }
 
 function start() {
@@ -364,7 +368,27 @@ function start() {
   timerId = setInterval(tick, 1000);
   updateDisplay();
   playSpotifyForLiveScope();
+  acquireWakeLock();
 }
+
+/* ---- screen wake lock: keeps the screen on while the timer is running, so a long Focus
+   session doesn't get silently interrupted by the device locking itself ---- */
+let wakeLock = null;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator) || !running || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) { /* denied, or unsupported on this device — timer keeps working regardless */ }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+// The OS releases the lock as soon as the tab is hidden — re-request it once the visitor comes back,
+// but only if the timer is still running (otherwise this would re-lock a paused session for no reason).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running) acquireWakeLock();
+});
 
 function pause() {
   stopTimerOnly();
@@ -553,6 +577,14 @@ document.addEventListener('keydown', (e) => {
   if (document.querySelector('.modal-overlay.open')) return;
   e.preventDefault();
   toggleStart();
+});
+
+// Escape closes whichever modal is currently open — every modal already closes on a backdrop
+// click, this just adds the other standard way people expect to dismiss one.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const openModal = document.querySelector('.modal-overlay.open');
+  if (openModal) openModal.classList.remove('open');
 });
 
 /* ============ Settings modal ============ */
@@ -885,7 +917,7 @@ function renderTrackList() {
     li.className = 'track-item' + (isPlayingRow ? ' playing' : '');
     li.innerHTML = `
       <span class="t-index">${isPlayingRow ? '♪' : i + 1}</span>
-      <span class="t-name">${track.name}</span>
+      <span class="t-name">${escapeHtml(track.name)}</span>
       <span class="t-dur">${track.duration ? fmtTime(track.duration) : ''}</span>
       <button class="t-remove" title="${t('removeTrackTitle')}">✕</button>
     `;
