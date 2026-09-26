@@ -179,7 +179,7 @@ const STRINGS = {
   },
 };
 
-let lang = localStorage.getItem('pomodoro_lang') || 'fr';
+let lang = localStorage.getItem('pomodoro_lang') || 'en';
 function t(key, ...args) {
   const entry = (STRINGS[lang] && STRINGS[lang][key] !== undefined) ? STRINGS[lang][key] : STRINGS.fr[key];
   return typeof entry === 'function' ? entry(...args) : entry;
