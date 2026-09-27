@@ -183,9 +183,13 @@ const STRINGS = {
   },
 };
 
-let lang = localStorage.getItem('pomodoro_lang') || 'en';
+// Anglais par défaut. L'ancienne clé 'pomodoro_lang' était réécrite à chaque chargement
+// (donc 'fr' restait collé chez tous les anciens visiteurs) : on ne lit plus que la
+// nouvelle clé, enregistrée uniquement quand l'utilisateur choisit FR/EN lui-même.
+const LANG_KEY = 'focus_lang';
+let lang = localStorage.getItem(LANG_KEY) === 'fr' ? 'fr' : 'en';
 function t(key, ...args) {
-  const entry = (STRINGS[lang] && STRINGS[lang][key] !== undefined) ? STRINGS[lang][key] : STRINGS.fr[key];
+  const entry = (STRINGS[lang] && STRINGS[lang][key] !== undefined) ? STRINGS[lang][key] : STRINGS.en[key];
   return typeof entry === 'function' ? entry(...args) : entry;
 }
 
@@ -1307,7 +1311,6 @@ buildSpotifyWidgetSlots();
 /* ---- language ---- */
 function applyTranslations() {
   document.documentElement.lang = lang;
-  localStorage.setItem('pomodoro_lang', lang);
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     const s = t(el.dataset.i18nTitle);
@@ -1332,6 +1335,7 @@ function applyTranslations() {
 document.querySelectorAll('.lang-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     lang = btn.dataset.lang;
+    localStorage.setItem(LANG_KEY, lang);
     applyTranslations();
   });
 });
