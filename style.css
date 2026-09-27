@@ -620,6 +620,8 @@ input[type="range"]::-moz-range-thumb {
   stroke-linejoin: round;
 }
 .ic .ic-fill { fill: currentColor; }
+/* tracé allégé pour une icône très détaillée, qui s'empâterait à 2 px */
+.ic-fine { stroke-width: 1.8; }
 .ctrl-btn.secondary {
   display: flex;
   align-items: center;
