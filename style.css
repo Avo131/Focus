@@ -596,19 +596,44 @@ input[type="range"]::-moz-range-thumb {
 .player-btn {
   background: none;
   border: none;
-  color: var(--text-dim);
+  color: var(--text);
+  /* l'atténuation passe par opacity, pas par une couleur semi-transparente :
+     sinon le remplissage et le contour d'une même icône se composent à deux niveaux */
+  opacity: 0.62;
   font-size: 16px;
   cursor: pointer;
   width: 34px; height: 34px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  transition: color .15s ease, background .15s ease;
+  transition: color .15s ease, background .15s ease, opacity .15s ease;
 }
-.player-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
-.player-btn.active { color: var(--accent); }
+.player-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); opacity: 1; }
+.player-btn.active { color: var(--accent); opacity: 1; }
+/* ---------- Icônes SVG des contrôles ---------- */
+.ic {
+  display: block;
+  width: 18px; height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ic .ic-fill { fill: currentColor; }
+.ctrl-btn.secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ctrl-btn .ic { width: 21px; height: 21px; }
+/* le « 1 » n'apparaît qu'en répétition d'une seule piste */
+.ic-one { opacity: 0; transition: opacity .15s ease; }
+.player-btn.repeat-one .ic-one { opacity: 1; }
+
 /* ---------- Bouton lecture = marque Focus ---------- */
 .player-btn.play {
   --p: 0;
+  opacity: 1;
   width: 48px; height: 48px;
   padding: 0;
   background: rgba(255,255,255,0.08);

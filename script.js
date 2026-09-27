@@ -1086,7 +1086,7 @@ shuffleBtn.addEventListener('click', () => {
 repeatBtn.addEventListener('click', () => {
   repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
   repeatBtn.classList.toggle('active', repeatMode !== 'off');
-  repeatBtn.textContent = repeatMode === 'one' ? '🔂' : '🔁';
+  repeatBtn.classList.toggle('repeat-one', repeatMode === 'one');
 });
 
 function handlePlaybackEnded() {
@@ -1309,7 +1309,12 @@ function applyTranslations() {
   document.documentElement.lang = lang;
   localStorage.setItem('pomodoro_lang', lang);
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const s = t(el.dataset.i18nTitle);
+    el.title = s;
+    // bouton sans texte (icône seule) : sans ceci il est muet pour un lecteur d'écran
+    if (!el.textContent.trim()) el.setAttribute('aria-label', s);
+  });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
 
