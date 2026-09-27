@@ -606,13 +606,93 @@ input[type="range"]::-moz-range-thumb {
 }
 .player-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 .player-btn.active { color: var(--accent); }
+/* ---------- Bouton lecture = marque Focus ---------- */
 .player-btn.play {
-  width: 44px; height: 44px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #1a1420;
-  font-size: 15px;
+  --p: 0;
+  width: 48px; height: 48px;
+  padding: 0;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: var(--text);
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
-.player-btn.play:hover { background: linear-gradient(135deg, var(--accent), var(--accent-2)); transform: scale(1.06); }
+.player-btn.play:hover {
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.26);
+  color: var(--text);
+  transform: scale(1.06);
+}
+.player-btn.play:active { transform: scale(0.94); }
+/* fond personnalisé clair : le contour blanc disparaîtrait */
+body.bg-is-light .player-btn.play { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.14); }
+body.bg-is-light .player-btn.play:hover { background: rgba(0,0,0,0.12); border-color: rgba(0,0,0,0.22); }
+.player-btn.play:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.fp-mark { display: block; width: 100%; height: 100%; }
+
+.fp-track {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 8;
+  opacity: 0.18;
+}
+.fp-arc {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 314.16px;
+  stroke-dashoffset: calc(314.16px * (1 - var(--p)));
+  transform-box: view-box;
+  transform-origin: center;
+  transform: rotate(-90deg);
+  transition: stroke-dashoffset .28s linear;
+}
+.fp-head {
+  fill: var(--accent);
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: center;
+  transform: rotate(calc(var(--p) * 360deg));
+  transition: transform .28s linear, opacity .25s ease;
+}
+.player-btn.play.is-playing .fp-head { opacity: 1; }
+
+.fp-halo {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: center;
+}
+.player-btn.play.is-playing .fp-halo { animation: fp-halo 3.2s ease-out infinite; }
+@keyframes fp-halo {
+  0%   { transform: scale(0.92); opacity: 0; }
+  25%  { opacity: 0.32; }
+  100% { transform: scale(1.18); opacity: 0; }
+}
+
+.fp-glyph {
+  fill: currentColor;
+  transform-box: view-box;
+  transform-origin: center;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.fp-play { stroke: currentColor; stroke-width: 5; stroke-linejoin: round; }
+.fp-pause { opacity: 0; transform: scale(0.7); }
+.player-btn.play.is-playing .fp-play { opacity: 0; transform: scale(0.7); }
+.player-btn.play.is-playing .fp-pause { opacity: 1; transform: scale(1); }
+
+/* saut de piste / seek : on repositionne sans balayer l'anneau à rebours */
+.player-btn.play.fp-jump .fp-arc,
+.player-btn.play.fp-jump .fp-head { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .player-btn.play.is-playing .fp-halo { animation: none; }
+  .player-btn.play:hover, .player-btn.play:active { transform: none; }
+  .fp-arc, .fp-head, .fp-glyph { transition: none; }
+}
 
 /* ---------- Modals ---------- */
 .modal-overlay {

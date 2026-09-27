@@ -34,6 +34,8 @@ const STRINGS = {
     shuffleTitle: 'Aléatoire',
     prevTitle: 'Précédent',
     playPauseTitle: 'Lecture/Pause',
+    playTitle: 'Lecture',
+    pauseTitle: 'Pause',
     nextTitle: 'Suivant',
     repeatTitle: 'Répéter',
     statsModalTitle: 'Statistiques',
@@ -116,6 +118,8 @@ const STRINGS = {
     shuffleTitle: 'Shuffle',
     prevTitle: 'Previous',
     playPauseTitle: 'Play/Pause',
+    playTitle: 'Play',
+    pauseTitle: 'Pause',
     nextTitle: 'Next',
     repeatTitle: 'Repeat',
     statsModalTitle: 'Statistics',
@@ -1009,8 +1013,28 @@ function isCurrentlyPlaying() {
 }
 
 function updatePlayIcon(playing) {
-  playPauseBtn.textContent = playing ? '⏸' : '▶';
+  playPauseBtn.classList.toggle('is-playing', playing);
+  playPauseBtn.setAttribute('aria-label', t(playing ? 'pauseTitle' : 'playTitle'));
   nowPlaying.classList.toggle('paused', !playing);
+}
+
+// Anneau de la marque = progression du morceau. `instant` coupe la transition
+// (changement de piste, seek) pour éviter un balayage à rebours.
+function setPlayProgress(p, instant) {
+  const v = Math.max(0, Math.min(1, Number(p) || 0));
+  if (instant) {
+    playPauseBtn.classList.add('fp-jump');
+    playPauseBtn.style.setProperty('--p', v);
+    void playPauseBtn.offsetWidth;
+    playPauseBtn.classList.remove('fp-jump');
+  } else {
+    playPauseBtn.style.setProperty('--p', v);
+  }
+}
+
+function audioFraction() {
+  const d = audioPlayer.duration;
+  return (d && isFinite(d) && d > 0) ? audioPlayer.currentTime / d : 0;
 }
 
 function resetNowPlayingDisplay() {
@@ -1019,6 +1043,7 @@ function resetNowPlayingDisplay() {
   npDuration.textContent = '0:00';
   seekBar.value = 0;
   seekBar.max = 100;
+  setPlayProgress(0, true);
 }
 
 playPauseBtn.addEventListener('click', () => {
@@ -1079,6 +1104,7 @@ audioPlayer.addEventListener('ended', handlePlaybackEnded);
 audioPlayer.addEventListener('loadedmetadata', () => {
   npDuration.textContent = fmtTime(audioPlayer.duration);
   seekBar.max = audioPlayer.duration;
+  setPlayProgress(0, true);
   const list = liveTracks();
   if (currentIndex !== -1 && list[currentIndex]) {
     list[currentIndex].duration = audioPlayer.duration;
@@ -1088,9 +1114,11 @@ audioPlayer.addEventListener('loadedmetadata', () => {
 audioPlayer.addEventListener('timeupdate', () => {
   npCurrent.textContent = fmtTime(audioPlayer.currentTime);
   if (!seekBar.matches(':active')) seekBar.value = audioPlayer.currentTime;
+  setPlayProgress(audioFraction());
 });
 seekBar.addEventListener('input', () => {
   audioPlayer.currentTime = seekBar.value;
+  setPlayProgress(audioFraction(), true);
 });
 
 /* ---- playlist mode: unique vs. par phase ---- */
@@ -1289,6 +1317,7 @@ function applyTranslations() {
   renderPresets();
   modeLabel.textContent = modeText(mode);
   startBtn.textContent = running ? t('startBtnPause') : t('startBtnStart');
+  updatePlayIcon(!audioPlayer.paused);
   updateDisplay();
   refreshPlaylistUI();
   if (bgModal.classList.contains('open')) renderBgModal();
