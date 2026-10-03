@@ -984,6 +984,36 @@ body.bg-is-light .player-btn.play:hover { background: rgba(0,0,0,0.12); border-c
   font-size: 13px;
   font-family: inherit;
 }
+/* Vert Spotify pour le bloc "lien de playlist Spotify" */
+.link-input-section {
+  --spotify-green: #1db954;
+}
+.link-input-section .field-label {
+  color: var(--spotify-green);
+  font-weight: 600;
+}
+.link-input-section input[type="text"] {
+  border-color: rgba(29,185,84,0.45);
+}
+.link-input-section input[type="text"]:focus {
+  outline: none;
+  border-color: var(--spotify-green);
+  box-shadow: 0 0 0 3px rgba(29,185,84,0.25);
+}
+#spotifyLinkAddBtn {
+  background: var(--spotify-green);
+  color: #0b1a10;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  transition: background 0.15s;
+}
+#spotifyLinkAddBtn:hover {
+  background: #1ed760;
+  color: #0b1a10;
+}
+
 .modal-divider {
   border-top: 1px solid var(--glass-border);
   margin: 2px 0;
