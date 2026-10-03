@@ -242,7 +242,8 @@ body.has-custom-video .custom-bg { display: none; }
 .preset-btn .p-desc { font-size: 11.5px; color: var(--text-dim); }
 .preset-btn.active .p-desc { color: var(--text); }
 
-@media (max-width: 1040px) {
+/* Tablette et ordinateur gardent le format ordinateur : seul le téléphone (<=640px) bascule en format mobile. */
+@media (max-width: 640px) {
   .side-fixed {
     position: static;
     width: 100%;
@@ -736,6 +737,8 @@ body.bg-is-light .player-btn.play:hover { background: rgba(0,0,0,0.12); border-c
 .modal {
   width: 100%;
   max-width: 420px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   background: rgba(24,19,32,0.92);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
@@ -1035,4 +1038,36 @@ body.bg-is-light .player-btn.play:hover { background: rgba(0,0,0,0.12); border-c
   .session-badge { display: none; }
   .controls { gap: 12px; }
   .ctrl-btn.primary { padding: 14px 32px; font-size: 14px; }
+}
+
+/* ---------- Mobile (phone only, <=640px): real scrolling layout instead of the squeezed single-screen desktop grid. Tablet and desktop are untouched. ---------- */
+@media (max-width: 640px) {
+  html, body { height: auto; }
+  body { min-height: 100vh; overflow-y: auto; }
+
+  .app {
+    height: auto;
+    min-height: 100vh;
+    padding: 18px 16px calc(32px + env(safe-area-inset-bottom, 0px));
+    overflow: visible;
+  }
+
+  .main-grid { flex: none; }
+  .center-column { flex: none; gap: 20px; }
+
+  .side-fixed { margin: 0 auto 18px; gap: 16px; }
+  .preset-list { flex-direction: column; }
+  .preset-btn { flex: 1 1 100%; }
+
+  .timer-section { flex-shrink: 0; }
+  .timer-card { width: min(72vmin, 300px); height: min(72vmin, 300px); }
+  .time-display { font-size: clamp(42px, 13vmin, 64px); }
+
+  .controls { margin-top: 24px; }
+  .ctrl-btn.secondary { width: 48px; height: 48px; }
+
+  .playlist-panel { flex: none; margin-top: 8px; }
+  .playlist-panel .track-list { max-height: 45vh; }
+
+  .topbar { margin-bottom: 18px; }
 }
